@@ -1,3 +1,4 @@
+import io
 import asyncio
 from datetime import datetime
 from telegram import Update
@@ -7,8 +8,8 @@ from sqlalchemy import or_
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.db.models import Task
-# IMPORTANTE: Importamos la nueva función inteligente
 from app.services.ai_service import analyze_intent
+from app.services.ai_service import analyze_intent, analyze_audio_intent
 
 
 # --- 1. COMANDOS CLÁSICOS (Listar y Borrar) ---
@@ -122,6 +123,79 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
+# ... (imports y resto del código igual) ...
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    # Feedback visual
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_voice")
+
+    try:
+        # 1. Descargar audio
+        voice_file = await context.bot.get_file(update.message.voice.file_id)
+        buffer = io.BytesIO()
+        await voice_file.download_to_memory(buffer)
+        audio_bytes = buffer.getvalue()
+
+        # 2. Contexto
+        db = SessionLocal()
+        try:
+            tasks = db.query(Task).filter(Task.is_completed == False).all()
+            tasks_list = [f"{t.id}: {t.title}" for t in tasks]
+
+            # 3. Consultar IA
+            ai_decision = await asyncio.to_thread(analyze_audio_intent, audio_bytes, tasks_list)
+
+            # 4. Acciones
+            if ai_decision.action == "complete":
+                task = db.query(Task).filter(Task.id == ai_decision.target_id).first()
+                if task:
+                    task.is_completed = True
+                    db.commit()
+                    await update.message.reply_text(f"✅ Tarea completada:\n~~{task.title}~~", parse_mode="Markdown")
+                else:
+                    await update.message.reply_text(
+                        f"🤔 Entendí que querías completar la tarea {ai_decision.target_id}, pero no existe.")
+
+            elif ai_decision.action == "delete":
+                task = db.query(Task).filter(Task.id == ai_decision.target_id).first()
+                if task:
+                    db.delete(task)
+                    db.commit()
+                    await update.message.reply_text(f"🗑️ Tarea eliminada: **{task.title}**", parse_mode="Markdown")
+
+            elif ai_decision.action == "chat":
+                await update.message.reply_text(f"🗣️ {ai_decision.reply_text}")
+
+            elif ai_decision.action == "create":
+                new_task = Task(
+                    title=ai_decision.title,
+                    subject="Telegram Voz",
+                    deadline=datetime.fromisoformat(ai_decision.deadline) if ai_decision.deadline else None,
+                    priority=ai_decision.priority or "media",
+                    source="voice"
+                )
+                db.add(new_task)
+                db.commit()
+                db.refresh(new_task)
+
+                date_str = new_task.deadline.strftime('%d/%m %H:%M') if new_task.deadline else "Hoy"
+
+                # --- AQUÍ ESTÁ EL CAMBIO DE FORMATO ---
+                msg = (f"✅ **Tarea Guardada**\n\n"  # Quitamos (Audio)
+                       f"📝 **{new_task.title}**\n"  # Negritas en título
+                       f"📅 {date_str}\n"  # Salto de línea forzado
+                       f"🚨 Prioridad: {new_task.priority.upper()}")
+
+                await update.message.reply_text(msg, parse_mode="Markdown")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        await update.message.reply_text(f"🔥 Error procesando audio: {str(e)}")
+
 # --- 3. CONFIGURACIÓN ---
 def create_bot_app():
     application = ApplicationBuilder().token(settings.TELEGRAM_TOKEN).build()
@@ -129,8 +203,12 @@ def create_bot_app():
     application.add_handler(CommandHandler("listar", list_tasks))
     application.add_handler(CommandHandler("borrar", delete_task))
 
-    # Manejamos todo el texto con la nueva función inteligente
+    # Handler de Texto
     echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
     application.add_handler(echo_handler)
+
+    # NUEVO: Handler de Voz (Notas de audio)
+    voice_handler = MessageHandler(filters.VOICE, handle_voice)
+    application.add_handler(voice_handler)
 
     return application
