@@ -1,32 +1,15 @@
-import logging
+# app/bot.py
 import asyncio
-import sys
-import os
-
-# Add the project root to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
-
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.db.models import Task
 from app.services.ai_service import parse_task_with_ai
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Este es el 'Controlador' de Telegram.
-    Recibe texto -> Llama a Gemini -> Guarda en DB -> Responde.
-    """
     user_text = update.message.text
-
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     try:
@@ -56,12 +39,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(response_msg, parse_mode="Markdown")
 
-
-if __name__ == '__main__':
+def create_bot_app():
     application = ApplicationBuilder().token(settings.TELEGRAM_TOKEN).build()
-
     echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
     application.add_handler(echo_handler)
-
-    print("🤖 Bot de Tareas iniciado... (Presiona Ctrl+C para detener)")
-    application.run_polling()
+    return application
