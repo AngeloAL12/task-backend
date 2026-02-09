@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
@@ -8,7 +9,7 @@ ENV_PATH = BASE_DIR / ".env"
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "TaskMaster AI"
-    DATABASE_URL: str = "sqlite:///./tasks.db"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./tasks.db")
 
     GEMINI_API_KEY: str
     TELEGRAM_TOKEN: str

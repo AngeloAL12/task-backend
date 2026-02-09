@@ -23,7 +23,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 🔥 OBTENEMOS EL ID DEL USUARIO ACTUAL
     user_id = update.effective_user.id
 
     db = SessionLocal()
