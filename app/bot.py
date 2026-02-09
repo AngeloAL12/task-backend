@@ -215,4 +215,5 @@ def create_bot_app():
     application.add_handler(echo_handler)
     voice_handler = MessageHandler(filters.VOICE, handle_voice)
     application.add_handler(voice_handler)
+    application.add_handler(CommandHandler("start", start))
     return application
