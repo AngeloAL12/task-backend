@@ -1,2 +1,5 @@
 .env
 tasks.db
+
+.vscode
+.idea

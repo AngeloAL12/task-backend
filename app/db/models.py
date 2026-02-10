@@ -14,3 +14,13 @@ class Task(Base):
     priority = Column(String, default="media")
     is_completed = Column(Boolean, default=False)
     source = Column(String)
+
+class Subject(Base):
+    __tablename__ = "subjects"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    telegram_id = Column(Integer, index=True)
+
+    name = Column(String)
+    schedule_text = Column(String)
