@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.routers import tasks
 from app.db.database import Base, engine
-from app.bot import create_bot_app  # Importamos el creador del bot
+from app.bot import create_bot_app
+from app.routers import auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,11 +26,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TaskMaster AI",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    app = FastAPI(),
 )
 
-app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
-
+app.include_router(auth.router)
+app.include_router(tasks.router, prefix="/api")
 
 @app.get("/health")
 def health_check():

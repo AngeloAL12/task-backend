@@ -1,5 +1,15 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
 from app.db.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    full_name = Column(String, nullable=True)
+
+    telegram_id = Column(Integer, nullable=True, unique=True)
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -14,6 +24,8 @@ class Task(Base):
     priority = Column(String, default="media")
     is_completed = Column(Boolean, default=False)
     source = Column(String)
+
+    created_at = Column(DateTime, server_default=func.now())
 
 class Subject(Base):
     __tablename__ = "subjects"
