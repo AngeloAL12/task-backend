@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, func, BigInteger
 from app.db.database import Base
 
 class User(Base):
@@ -9,14 +9,14 @@ class User(Base):
     hashed_password = Column(String)
     full_name = Column(String, nullable=True)
 
-    telegram_id = Column(Integer, nullable=True, unique=True)
+    telegram_id = Column(BigInteger, nullable=True, unique=True)
 
 class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, index=True)
 
-    telegram_id = Column(Integer, index=True)
+    telegram_id = Column(BigInteger, index=True)
 
     title = Column(String, index=True)
     subject = Column(String)
@@ -32,7 +32,7 @@ class Subject(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    telegram_id = Column(Integer, index=True)
+    telegram_id = Column(BigInteger, index=True)
 
     name = Column(String)
     schedule_text = Column(String)
