@@ -1,15 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 class MagicPayload(BaseModel):
     text: str
 
 class TaskCreate(BaseModel):
-    title: str
-    subject: Optional[str] = "General"
+    title: str = Field(..., min_length=1, max_length=100)
+    subject: Optional[str] = Field("General", max_length=50)
     deadline: Optional[datetime] = None
-    priority: Optional[str] = "media"
+    priority: Optional[Literal["alta", "media", "baja"]] = "media"
 
 class TaskResponse(TaskCreate):
     id: int

@@ -8,7 +8,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
-SECRET_KEY = settings.SECRET_KEY if hasattr(settings, "SECRET_KEY") else "TU_SECRETO_SUPER_SECRETO_CAMBIALO_EN_PROD"
+SECRET_KEY = settings.SECRET_KEY
 
 
 def verify_password(plain_password, hashed_password):
@@ -27,7 +27,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=30)  # Token dura 30 mins por defecto
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

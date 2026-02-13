@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str
     TELEGRAM_TOKEN: str
+    
+    SECRET_KEY: str = "your-secret-key-here" # Fallback only for dev, should be in .env
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     class Config:
 

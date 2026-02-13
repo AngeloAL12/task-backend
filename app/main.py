@@ -1,6 +1,6 @@
 # app/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from app.routers import tasks
 from app.db.database import Base, engine
 from app.bot import create_bot_app
@@ -27,12 +27,24 @@ app = FastAPI(
     title="TaskMaster AI",
     version="1.0.0",
     lifespan=lifespan,
-    app = FastAPI(),
 )
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(tasks.router, prefix="/api")
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permitir todo (ajustar en prod)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(auth.router)
+api_v1_router.include_router(users.router)
+api_v1_router.include_router(tasks.router)
+
+app.include_router(api_v1_router)
 
 @app.get("/health")
 def health_check():
