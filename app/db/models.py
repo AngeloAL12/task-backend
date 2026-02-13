@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, func, BigInteger
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, func, BigInteger, JSON
 from app.db.database import Base
 
 class User(Base):
@@ -50,4 +50,5 @@ class CalendarSource(Base):
     user_id = Column(Integer, index=True) # Linking to User.id (not telegram_id, though user has telegram_id)
     source_url = Column(String)
     name = Column(String)
+    subject_mapping = Column(JSON, default={})
     last_synced_at = Column(DateTime, nullable=True)

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -82,6 +82,32 @@ def sync_calendar(
     if not source:
         raise HTTPException(status_code=404, detail="Calendario no encontrado o no tienes permiso")
 
+    result = SyncService.sync_calendar(source_id, db)
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
+
+@router.patch("/{source_id}/mapping", response_model=SyncResponse)
+def update_mapping(
+        source_id: int,
+        mapping: Dict[str, str],
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    source = db.query(CalendarSource).filter(
+        CalendarSource.id == source_id,
+        CalendarSource.user_id == current_user.id
+    ).first()
+    
+    if not source:
+        raise HTTPException(status_code=404, detail="Calendario no encontrado")
+        
+    source.subject_mapping = mapping
+    db.commit()
+    
+    # Re-sync to apply changes retroactive
     result = SyncService.sync_calendar(source_id, db)
     
     if "error" in result:

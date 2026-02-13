@@ -54,9 +54,16 @@ class SyncService:
             raw_title = event.get("summary", "")
             clean_name = clean_moodle_title(raw_title)
             
+
             # Anti-Spam (Attendance)
             if "asistencia" in clean_name.lower(): 
                 continue
+
+            # Pre-calc subject to correctly group if needed, though grouping is by name (title base)
+            # We will resolve subject at upsert time for now, or just extract raw here?
+            # Actually, grouping is by clean_name which comes from TITLE. Subject is a property of the task.
+            # So we continue as is.
+
 
             if clean_name not in events_map:
                 events_map[clean_name] = {
@@ -76,6 +83,9 @@ class SyncService:
         # --- SAVING Phase ---
         synced_count = 0
         updated_count = 0
+        found_subjects = set()
+        mapping = source.subject_mapping or {}
+
         
         for name, data in events_map.items():
             
@@ -95,14 +105,29 @@ class SyncService:
             
             elif data["other_events"]:
                 for evt in data["other_events"]:
-                    res = SyncService._upsert_task(evt, name, source, user, db)
+                    # Resolve Subject
+                    raw_subject = extract_subject(evt, default_name=None)
+                    final_subject = source.name
+                    if raw_subject:
+                        found_subjects.add(raw_subject)
+                        final_subject = mapping.get(raw_subject, raw_subject)
+
+                    res = SyncService._upsert_task(evt, name, final_subject, source, user, db)
                     if res == "created": synced_count += 1
                     elif res == "updated": updated_count += 1
                 continue 
                 
             if final_event:
                 full_title = f"{name}{title_suffix}"
-                res = SyncService._upsert_task(final_event, full_title, source, user, db)
+                
+                # Resolve Subject (use final_event)
+                raw_subject = extract_subject(final_event, default_name=None)
+                final_subject = source.name
+                if raw_subject:
+                    found_subjects.add(raw_subject)
+                    final_subject = mapping.get(raw_subject, raw_subject)
+
+                res = SyncService._upsert_task(final_event, full_title, final_subject, source, user, db)
                 if res == "created": synced_count += 1
                 elif res == "updated": updated_count += 1
 
@@ -112,18 +137,17 @@ class SyncService:
         return {
             "status": "success",
             "new_tasks": synced_count,
-            "updated_tasks": updated_count
+            "updated_tasks": updated_count,
+            "found_subjects": list(found_subjects)
         }
 
     @staticmethod
-    def _upsert_task(event, final_title, source, user, db):
+    def _upsert_task(event, final_title, subject, source, user, db):
         # Determine deadline and start_date
         # For ICal events, start_time usually represents the 'event' time.
         # For a task/deadline, that is the deadline.
         deadline = event["start_time"]
         start_date = event.get("real_start_date") # Extracted from merge logic
-        
-        subject = extract_subject(event, default_name=source.name)
         
         existing = db.query(Task).filter(Task.external_uid == event["uid"]).first()
         
