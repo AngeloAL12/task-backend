@@ -26,6 +26,9 @@ class Task(Base):
     priority = Column(String, default="media")
     is_completed = Column(Boolean, default=False)
     source = Column(String)
+    external_uid = Column(String, index=True, nullable=True) # Unique ID from iCal
+    calendar_source_id = Column(Integer, nullable=True) # FK to calendar_sources
+
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -38,3 +41,12 @@ class Subject(Base):
 
     name = Column(String)
     schedule_text = Column(String)
+
+class CalendarSource(Base):
+    __tablename__ = "calendar_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True) # Linking to User.id (not telegram_id, though user has telegram_id)
+    source_url = Column(String)
+    name = Column(String)
+    last_synced_at = Column(DateTime, nullable=True)

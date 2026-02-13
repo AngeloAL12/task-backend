@@ -1,0 +1,15 @@
+meta {
+  name: List Sources
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/calendars
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

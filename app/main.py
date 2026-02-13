@@ -5,6 +5,8 @@ from app.routers import tasks
 from app.db.database import Base, engine
 from app.bot import create_bot_app
 from app.routers import auth, users
+from app.routers import calendars # <--- Importar el nuevo router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +45,7 @@ api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
 api_v1_router.include_router(users.router)
 api_v1_router.include_router(tasks.router)
+api_v1_router.include_router(calendars.router)
 
 app.include_router(api_v1_router)
 

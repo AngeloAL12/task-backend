@@ -1,0 +1,15 @@
+meta {
+  name: Delete Source
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{base_url}}/calendars/1
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
