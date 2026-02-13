@@ -7,9 +7,14 @@ meta {
 delete {
   url: {{base_url}}/calendars/1
   body: none
-  auth: inherit
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }

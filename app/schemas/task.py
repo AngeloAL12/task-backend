@@ -9,6 +9,7 @@ class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     subject: Optional[str] = Field("General", max_length=50)
     deadline: Optional[datetime] = None
+    start_date: Optional[datetime] = None
     priority: Optional[Literal["alta", "media", "baja"]] = "media"
 
 class TaskResponse(TaskCreate):

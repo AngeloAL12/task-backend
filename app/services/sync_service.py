@@ -1,7 +1,32 @@
+import re
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from app.db.models import Task, CalendarSource, User
 from app.services.ical_service import ICalService
+
+def clean_moodle_title(title: str) -> str:
+    if not title: return "Evento sin título"
+    # Remove common prefixes
+    garbage = ["Vencimiento de ", "Cierre del ", "Entrega de ", "Está pendiente: ", "Se cierra ", "Se abre "]
+    clean = title
+    for g in garbage:
+        clean = clean.replace(g, "")
+    return clean.strip()
+
+def extract_subject(event: dict, default_name="General") -> str:
+    """Attempts to find the subject in Categories or Description"""
+    # 1. Categories (Standard Moodle)
+    if event.get("categories"):
+        return event["categories"][0]
+
+    # 2. Description (Course: X)
+    description = event.get("description", "")
+    if description:
+        match = re.search(r'(?:Course|Curso):\s*(.*?)(\n|$)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+            
+    return default_name
 
 class SyncService:
     @staticmethod
@@ -18,47 +43,69 @@ class SyncService:
 
         content = ICalService.fetch_ics(source.source_url)
         if not content:
-             return {"error": "Failed to fetch ICS content"}
+            return {"error": "Failed to fetch ICS content"}
              
         events = ICalService.parse_ics(content)
         
+        # --- ANALYSIS Phase ---
+        events_map = {} 
+        
+        for event in events:
+            raw_title = event.get("summary", "")
+            clean_name = clean_moodle_title(raw_title)
+            
+            # Anti-Spam (Attendance)
+            if "asistencia" in clean_name.lower(): 
+                continue
+
+            if clean_name not in events_map:
+                events_map[clean_name] = {
+                    "open_event": None, 
+                    "close_event": None, 
+                    "other_events": []
+                }
+            
+            # Classify
+            if "Se abre" in raw_title:
+                events_map[clean_name]["open_event"] = event
+            elif "Se cierra" in raw_title:
+                events_map[clean_name]["close_event"] = event
+            else:
+                events_map[clean_name]["other_events"].append(event)
+
+        # --- SAVING Phase ---
         synced_count = 0
         updated_count = 0
-
-        for event in events:
-            # Check if task already exists
-            existing_task = db.query(Task).filter(
-                Task.external_uid == event["uid"]
-            ).first()
-
-            if existing_task:
-                # Update logic
-                updated = False
-                if existing_task.deadline != event["start_time"]:
-                    existing_task.deadline = event["start_time"]
-                    updated = True
-                
-                if existing_task.title != event["summary"]:
-                    existing_task.title = event["summary"]
-                    updated = True
-                
-                if updated:
-                    updated_count += 1
-            else:
-                # Create new task
-                new_task = Task(
-                    telegram_id=user.telegram_id,
-                    title=event["summary"],
-                    subject=source.name, # Use source name as subject (e.g. "Moodle")
-                    deadline=event["start_time"],
-                    priority="media",
-                    source="ical",
-                    external_uid=event["uid"],
-                    calendar_source_id=source.id
-                )
-                db.add(new_task)
-                synced_count += 1
         
+        for name, data in events_map.items():
+            
+            # CASE 1: EXAMS (Open + Close, or just Close)
+            final_event = None
+            title_suffix = ""
+            
+            if data["close_event"]:
+                final_event = data["close_event"]
+                if data["open_event"]:
+                    # Merge logic
+                    # Store the REAL start date (from the Open event) in a new field if possible, or just for display
+                    start_date = data["open_event"]["start_time"]
+                    final_event["real_start_date"] = start_date # Temporary key
+                    
+                    title_suffix = ""
+            
+            elif data["other_events"]:
+                for evt in data["other_events"]:
+                    res = SyncService._upsert_task(evt, name, source, user, db)
+                    if res == "created": synced_count += 1
+                    elif res == "updated": updated_count += 1
+                continue 
+                
+            if final_event:
+                full_title = f"{name}{title_suffix}"
+                res = SyncService._upsert_task(final_event, full_title, source, user, db)
+                if res == "created": synced_count += 1
+                elif res == "updated": updated_count += 1
+
         source.last_synced_at = datetime.utcnow()
         db.commit()
         
@@ -67,3 +114,46 @@ class SyncService:
             "new_tasks": synced_count,
             "updated_tasks": updated_count
         }
+
+    @staticmethod
+    def _upsert_task(event, final_title, source, user, db):
+        # Determine deadline and start_date
+        # For ICal events, start_time usually represents the 'event' time.
+        # For a task/deadline, that is the deadline.
+        deadline = event["start_time"]
+        start_date = event.get("real_start_date") # Extracted from merge logic
+        
+        subject = extract_subject(event, default_name=source.name)
+        
+        existing = db.query(Task).filter(Task.external_uid == event["uid"]).first()
+        
+        if existing:
+            changed = False
+            if existing.deadline != deadline:
+                existing.deadline = deadline
+                changed = True
+            if existing.title != final_title:
+                existing.title = final_title
+                changed = True
+            if existing.subject != subject:
+                existing.subject = subject
+                changed = True
+            if existing.start_date != start_date:
+                existing.start_date = start_date
+                changed = True
+                
+            return "updated" if changed else "ignored"
+        else:
+            new_task = Task(
+                telegram_id=user.telegram_id,
+                title=final_title,
+                subject=subject,
+                deadline=deadline,
+                start_date=start_date,
+                priority="alta" if "Examen" in final_title else "media",
+                source="ical",
+                external_uid=event["uid"],
+                calendar_source_id=source.id
+            )
+            db.add(new_task)
+            return "created"

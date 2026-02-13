@@ -21,6 +21,7 @@ class Task(Base):
     telegram_id = Column(BigInteger, index=True)
 
     title = Column(String, index=True)
+    start_date = Column(DateTime, nullable=True)
     subject = Column(String)
     deadline = Column(DateTime, nullable=True)
     priority = Column(String, default="media")

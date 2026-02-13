@@ -7,7 +7,18 @@ meta {
 post {
   url: {{base_url}}/calendars
   body: json
-  auth: inherit
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Moodle ITMexicali",
+    "source_url": "https://moodle.itmexicali.edu.mx/calendar/export_execute.php?userid=25836&authtoken=e30185b9d70903f129f64d0777a3c74e2b610d92&preset_what=all&preset_time=recentupcoming"
+  }
 }
 
 settings {

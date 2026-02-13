@@ -26,7 +26,7 @@ def create_calendar_source(
         )
 
     db_source = CalendarSource(
-        user_id=current_user.id, # Linking to internal user ID
+        user_id=current_user.id,
         source_url=source.source_url,
         name=source.name
     )
@@ -34,7 +34,6 @@ def create_calendar_source(
     db.commit()
     db.refresh(db_source)
     
-    # Trigger initial sync
     SyncService.sync_calendar(db_source.id, db)
     
     return db_source
