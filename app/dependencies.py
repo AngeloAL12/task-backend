@@ -19,7 +19,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
 
     try:
-        # 1. Decodificamos el Token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
@@ -28,10 +27,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
 
-    # 2. Buscamos al usuario en la DB
     user = db.query(User).filter(User.email == token_data.email).first()
     if user is None:
         raise credentials_exception
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuario inactivo"
+        )
 
     return user
 

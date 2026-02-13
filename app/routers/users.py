@@ -70,6 +70,7 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
-    db.delete(user)
+    user.is_active = False
     db.commit()
+    db.refresh(user)
     return None

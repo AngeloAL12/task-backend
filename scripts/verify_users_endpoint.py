@@ -12,116 +12,92 @@ from app.main import app
 client = TestClient(app)
 
 def run_verify():
-    print("🚀 Starting User CRUD Verification...")
+    print("🚀 Starting User Soft Delete & Reactivation Verification...")
 
-    # 1. Register a user to be our Superadmin
-    email = "super_crud_test@example.com"
+    # 1. Register a user to be our Superadmin (if not exists)
+    email = "sof_delete_admin@example.com"
     password = "password123"
-    full_name = "Super Admin Test"
+    full_name = "Soft Delete Admin"
     
-    print(f"\n1️⃣ Registering user {email}...")
-    response = client.post("/auth/register", json={
-        "email": email,
-        "password": password,
-        "full_name": full_name
+    print(f"\n1️⃣ Registering Superadmin {email}...")
+    client.post("/auth/register", json={
+        "email": email, "password": password, "full_name": full_name
     })
-    
-    if response.status_code == 200:
-        print("   ✅ Registered.")
-    elif response.status_code == 400:
-        print("   ℹ️ User already exists.")
-    else:
-        print(f"   ❌ Registration failed: {response.json()}")
-        return
 
-    # 2. Promote to Superadmin using our script
-    print(f"\n2️⃣ Promoting {email} to Superadmin...")
-    try:
-        subprocess.run(
-            ["uv", "run", "scripts/add_superadmin_column.py", "--promote", email], 
-            check=True,
-            capture_output=True
-        )
-        print("   ✅ Promotion script executed successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"   ❌ Promotion failed: {e.stderr.decode()}")
-        return
+    # Promote to Superadmin
+    print(f"   Promoting {email}...")
+    subprocess.run(["uv", "run", "scripts/add_superadmin_column.py", "--promote", email], check=True, capture_output=True)
 
-    # 3. Login to get token
-    print("\n3️⃣ Logging in...")
-    login_response = client.post("/auth/token", data={
-        "username": email,
-        "password": password
-    })
+    # Login
+    print("   Logging in...")
+    login_response = client.post("/auth/token", data={"username": email, "password": password})
     token = login_response.json().get("access_token")
     if not token:
-        print("   ❌ Login failed.")
+        print("❌ Login failed.")
         return
-    print("   ✅ Logged in.")
-    
     headers = {"Authorization": f"Bearer {token}"}
+    print("   ✅ Logged in.")
 
-    # 4. GET /users (Read All)
-    print("\n4️⃣ Testing GET /users (List)...")
-    response = client.get("/users/", headers=headers)
-    if response.status_code == 200:
-        users = response.json()
-        print(f"   ✅ Success. Found {len(users)} users.")
-        # Find our user id
-        my_user = next((u for u in users if u["email"] == email), None)
-        if not my_user:
-            print("   ❌ Basic integrity check failed: Created user not found in list.")
-            return
-        user_id = my_user["id"]
+    # 2. Register a VICTIM user
+    victim_email = "victim@example.com"
+    victim_pass = "password123"
+    print(f"\n2️⃣ Registering Victim {victim_email}...")
+    client.post("/auth/register", json={
+        "email": victim_email, "password": victim_pass, "full_name": "Victim User"
+    })
+    
+    # Get Victim ID
+    users = client.get("/users/", headers=headers).json()
+    victim = next((u for u in users if u["email"] == victim_email), None)
+    if not victim:
+        print("❌ Victim not found.")
+        return
+    victim_id = victim["id"]
+    print(f"   ✅ Victim ID: {victim_id}")
+
+    # 3. Soft Delete Victim
+    print(f"\n3️⃣ Soft Deleting Victim (ID: {victim_id})...")
+    response = client.delete(f"/users/{victim_id}", headers=headers)
+    if response.status_code == 204:
+        print("   ✅ Success (204 No Content).")
     else:
-        print(f"   ❌ Failed: {response.status_code} - {response.text}")
+        print(f"❌ Failed: {response.status_code}")
         return
 
-    # 5. GET /users/{id} (Read One)
-    print(f"\n5️⃣ Testing GET /users/{user_id} (Read One)...")
-    response = client.get(f"/users/{user_id}", headers=headers)
-    if response.status_code == 200:
-        print("   ✅ Success.")
-        assert response.json()["email"] == email
+    # 4. Verify Victim is Inactive
+    print("\n4️⃣ Verifying Victim is Inactive...")
+    response = client.get(f"/users/{victim_id}", headers=headers)
+    user_data = response.json()
+    if user_data["is_active"] is False:
+        print("   ✅ Verified: is_active = False")
     else:
-        print(f"   ❌ Failed: {response.status_code} - {response.text}")
+        print(f"❌ Failed: is_active is {user_data.get('is_active')}")
 
-    # 6. PATCH /users/{id} (Update)
-    print(f"\n6️⃣ Testing PATCH /users/{user_id} (Update)...")
-    new_name = "Super Admin Updated"
-    response = client.patch(f"/users/{user_id}", json={"full_name": new_name}, headers=headers)
-    if response.status_code == 200:
-        print("   ✅ Success.")
-        assert response.json()["full_name"] == new_name
+    # 5. Verify Victim Cannot Login
+    print("\n5️⃣ Verifying Victim Cannot Login...")
+    login_response = client.post("/auth/token", data={"username": victim_email, "password": victim_pass})
+    if login_response.status_code == 400: # We set it to 400 in dependencies
+        print("   ✅ Verified: Login rejected (400 Bad Request).")
     else:
-        print(f"   ❌ Failed: {response.status_code} - {response.text}")
+        print(f"❌ Failed: Status {login_response.status_code} - {login_response.text}")
 
-    # 7. DELETE /users/{id} (Delete)
-    # Let's create a *dummy* user to delete, so we don't delete ourselves and break the script?
-    # Actually, let's just delete ourselves at the end. It's a test user.
-    print(f"\n7️⃣ Testing DELETE /users/{user_id} (Delete)...")
-    response = client.delete(f"/users/{user_id}", headers=headers)
-    if response.status_code == 204:
-        print("   ✅ Success.")
+    # 6. Resurrect Victim
+    print(f"\n6️⃣ Resurrecting Victim...")
+    response = client.patch(f"/users/{victim_id}", json={"is_active": True}, headers=headers)
+    if response.status_code == 200 and response.json()["is_active"] is True:
+        print("   ✅ Resurrection Successful.")
     else:
-        print(f"   ❌ Failed: {response.status_code} - {response.text}")
+        print(f"❌ Failed: {response.status_code}")
 
-    # 8. Verify deletion
-    print("\n8️⃣ Verifying Deletion...")
-    response = client.get(f"/users/{user_id}", headers=headers)
-    # We might get 401 if our user is deleted and token invalid? 
-    # Or 404 if token is still valid (JWT doesn't check DB on every req? check dependency)
-    # Dependency checks DB: `user = db.query(User)... if user is None: raise credentials_exception`
-    # So we should get 401 Unauthorized because the user no longer exists for the token credential check.
-    
-    if response.status_code == 401:
-        print("   ✅ Verified: Token no longer valid (User deleted).")
-    elif response.status_code == 404:
-         print("   ✅ Verified: User not found.")
+    # 7. Verify Victim Can Login Again
+    print("\n7️⃣ Verifying Victim Can Login Again...")
+    login_response = client.post("/auth/token", data={"username": victim_email, "password": victim_pass})
+    if login_response.status_code == 200:
+        print("   ✅ Verified: Login successful.")
     else:
-        print(f"   ⚠️ Unexpected status: {response.status_code} (Might be okay depending on implementation)")
+        print(f"❌ Failed: Login still blocked ({login_response.status_code})")
 
-    print("\n✨ Verification Complete!")
+    print("\n✨ Soft Delete & Reactivation Verified!")
 
 if __name__ == "__main__":
     run_verify()

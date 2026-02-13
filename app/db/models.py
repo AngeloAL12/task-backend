@@ -11,6 +11,7 @@ class User(Base):
 
     telegram_id = Column(BigInteger, nullable=True, unique=True)
     is_superadmin = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
 
 class Task(Base):
     __tablename__ = "tasks"
