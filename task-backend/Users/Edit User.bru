@@ -1,0 +1,27 @@
+meta {
+  name: Edit User
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{base_url}}/users/2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "email": "nane@fiono.tech",
+    "full_name": "Danetzi Garcia"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
