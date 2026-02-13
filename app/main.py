@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from app.routers import tasks
 from app.db.database import Base, engine
 from app.bot import create_bot_app
-from app.routers import auth
+from app.routers import auth, users
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     bot_app = create_bot_app()
     await bot_app.initialize()
     await bot_app.start()
-    await bot_app.updater.start_polling()  # Empieza a escuchar a Telegram
+    await bot_app.updater.start_polling()
     print("🤖 Bot de Telegram conectado y escuchando dentro de FastAPI")
 
     yield
@@ -31,6 +31,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(tasks.router, prefix="/api")
 
 @app.get("/health")

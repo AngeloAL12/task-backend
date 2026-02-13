@@ -10,6 +10,7 @@ class User(Base):
     full_name = Column(String, nullable=True)
 
     telegram_id = Column(BigInteger, nullable=True, unique=True)
+    is_superadmin = Column(Boolean, default=False)
 
 class Task(Base):
     __tablename__ = "tasks"
