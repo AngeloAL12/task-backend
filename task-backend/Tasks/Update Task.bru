@@ -1,11 +1,11 @@
 meta {
-  name: Update Subject Mapping
+  name: Update Task
   type: http
-  seq: 5
+  seq: 4
 }
 
 patch {
-  url: {{base_url}}/calendars/1/mapping
+  url: {{base_url}}/tasks/40
   body: json
   auth: bearer
 }
@@ -16,7 +16,8 @@ auth:bearer {
 
 body:json {
   {
-    "PLF_vidblain_amaro_ISC": "Programación Lógica y Funcional vidblain"
+    "subject": "Ingeniería de Software",
+    "priority": "alta"
   }
 }
 

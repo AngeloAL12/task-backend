@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import Task, User
-from app.schemas.task import TaskResponse, TaskCreate, MagicPayload
+from app.schemas.task import TaskResponse, TaskCreate, TaskUpdate, MagicPayload
 from app.services.ai_service import parse_task_with_ai
-from app.dependencies import get_current_user  # <--- El Guardia de Seguridad
+from app.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/tasks",
@@ -18,19 +18,13 @@ def read_tasks(
         skip: int = 0,
         limit: int = 100,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)  # <--- Solo usuarios logueados
+        current_user: User = Depends(get_current_user)
 ):
-    # ESTRATEGIA: "El Truco de Magia" 🎩
-    # Si el usuario Web tiene un telegram_id vinculado en la tabla 'users',
-    # le mostramos sus tareas de Telegram.
-
     if current_user.telegram_id:
         return db.query(Task).filter(
             Task.telegram_id == current_user.telegram_id
         ).order_by(Task.deadline).offset(skip).limit(limit).all()
 
-    # Si no tiene telegram_id, por ahora devolvemos lista vacía
-    # (o podrías filtrar por un nuevo campo user_id si decides migrar)
     return []
 
 @router.post("/", response_model=TaskResponse)
@@ -47,7 +41,7 @@ def create_task(
 
     new_task = Task(
         **task.dict(),
-        telegram_id=current_user.telegram_id,  # <--- Asignamos al dueño
+        telegram_id=current_user.telegram_id,
         source="web"
     )
     db.add(new_task)
@@ -71,7 +65,7 @@ def create_magic_task(
 
     new_task = Task(
         **task_data.dict(),
-        telegram_id=current_user.telegram_id,  # <--- La clave
+        telegram_id=current_user.telegram_id,
         source="magic_web"
     )
     db.add(new_task)
@@ -79,13 +73,35 @@ def create_magic_task(
     db.refresh(new_task)
     return new_task
 
+@router.patch("/{task_id}", response_model=TaskResponse)
+def update_task(
+        task_id: int,
+        task_update: TaskUpdate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    task = db.query(Task).filter(
+        Task.id == task_id,
+        Task.telegram_id == current_user.telegram_id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada o no tienes permiso")
+
+    update_data = task_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(task, key, value)
+
+    db.commit()
+    db.refresh(task)
+    return task
+
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(
         task_id: int,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # Buscamos la tarea Y verificamos que sea del usuario
     task = db.query(Task).filter(
         Task.id == task_id,
         Task.telegram_id == current_user.telegram_id
