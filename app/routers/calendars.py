@@ -89,6 +89,7 @@ def sync_calendar(
         
     return result
 
+
 @router.patch("/{source_id}/mapping", response_model=SyncResponse)
 def update_mapping(
         source_id: int,
@@ -100,17 +101,21 @@ def update_mapping(
         CalendarSource.id == source_id,
         CalendarSource.user_id == current_user.id
     ).first()
-    
+
     if not source:
         raise HTTPException(status_code=404, detail="Calendario no encontrado")
-        
-    source.subject_mapping = mapping
+
+    current_mapping = dict(source.subject_mapping or {})
+
+    current_mapping.update(mapping)
+
+    source.subject_mapping = current_mapping
+
     db.commit()
-    
-    # Re-sync to apply changes retroactive
+
     result = SyncService.sync_calendar(source_id, db)
-    
+
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
-        
+
     return result

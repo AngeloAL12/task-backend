@@ -1,0 +1,28 @@
+meta {
+  name: Update Subject Mapping
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/calendars/1/mapping
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "G_lydia_esquivel_ISC": "Graficación",
+    "PLF_vidblain_amaro_ISC": "Programación Lógica y Funcional",
+    "LI_perez": "Lenguajes de Interfaz"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
