@@ -37,9 +37,8 @@ class SyncService:
         
         # Get user to count associated Tasks for logging/debug
         user = db.query(User).filter(User.id == source.user_id).first()
-        if not user or not user.telegram_id:
-            # We need a telegram_id to create tasks currently
-            return {"error": "User does not have a linked Telegram ID"}
+        if not user:
+            return {"error": "User not found"}
 
         content = ICalService.fetch_ics(source.source_url)
         if not content:
@@ -169,7 +168,7 @@ class SyncService:
             return "updated" if changed else "ignored"
         else:
             new_task = Task(
-                telegram_id=user.telegram_id,
+                user_id=user.id,
                 title=final_title,
                 subject=subject,
                 deadline=deadline,

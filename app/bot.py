@@ -6,33 +6,52 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, Comma
 
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.db.models import Task, Subject  # <--- Importamos Subject
+from app.db.models import Task, Subject, User  # <--- Importamos Subject y User
 from app.services.ai_service import analyze_intent, analyze_audio_intent
 
 
-# --- 1. COMANDOS BÁSICOS ---
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
-    await update.message.reply_text(
-        f"¡Hola {user_name}! 👋\n\n"
-        "Soy tu asistente personal con IA. 🧠\n"
-        "Puedo organizar tus tareas por ti y detectar tus materias automáticamente según tu horario.\n\n"
-        "Pruébame diciendo:\n"
-        "🎤 *Mándame una nota de voz*\n"
-        "📝 *'Recordar examen de redes mañana'*\n"
-        "📋 Usa /listar para ver tus pendientes.",
-        parse_mode="Markdown"
-    )
+    chat_id = update.effective_chat.id
 
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == chat_id).first()
+
+        # Si no existe en la base de datos, le damos la bienvenida y su ID
+        if not user:
+            await update.message.reply_text(
+                f"¡Hola {user_name}! 👋\n\n"
+                "Soy tu asistente personal con IA. 🧠\n"
+                "Parece que **aún no has vinculado tu cuenta**.\n\n"
+                "Ve a tu perfil en la aplicación web y pega este ID de Telegram:\n"
+                f"`{chat_id}`\n\n"
+                "¡Avísame con un 'hola' cuando lo hayas hecho para empezar!",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Si ya está registrado, le damos el menú normal
+        await update.message.reply_text(
+            f"¡Qué bueno verte de nuevo, {user_name}! 👋\n\n"
+            "Soy tu asistente personal con IA. 🧠\n"
+            "Puedo organizar tus tareas por ti y detectar tus materias automáticamente según tu horario.\n\n"
+            "Pruébame diciendo:\n"
+            "🎤 *Mándame una nota de voz*\n"
+            "📝 *'Recordar examen de redes mañana'*\n"
+            "📋 Usa /listar para ver tus pendientes.",
+            parse_mode="Markdown"
+        )
+    finally:
+        db.close()
 
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     db = SessionLocal()
     try:
-        tasks = db.query(Task).filter(
+        tasks = db.query(Task).join(User).filter(
             Task.is_completed == False,
-            Task.telegram_id == user_id
+            User.telegram_id == user_id
         ).order_by(Task.deadline).all()
 
         if not tasks:
@@ -65,7 +84,11 @@ async def delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id, Task.telegram_id == user_id).first()
+        task = db.query(Task).join(User).filter(
+            Task.id == task_id,
+            User.telegram_id == user_id
+        ).first()
+
         if not task:
             await update.message.reply_text("🤷‍♂️ No encontré esa tarea.")
             return
@@ -92,7 +115,13 @@ async def debug_add_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE)
         name, schedule = raw_text.split("|", 1)
 
         db = SessionLocal()
-        new_subject = Subject(telegram_id=user_id, name=name.strip(), schedule_text=schedule.strip())
+        user = db.query(User).filter(User.telegram_id == user_id).first()
+        if not user:
+             await update.message.reply_text("❌ Usuario no registrado. Regístrate en la web primero.")
+             db.close()
+             return
+        
+        new_subject = Subject(user_id=user.id, name=name.strip(), schedule_text=schedule.strip())
         db.add(new_subject)
         db.commit()
         db.close()
@@ -102,31 +131,41 @@ async def debug_add_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {e}")
 
-
-# --- 2. MANEJO DE TEXTO (INTELIGENTE) ---
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user_text = update.message.text
     chat_id = update.effective_chat.id
+    user_text = update.message.text
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     db = SessionLocal()
     try:
-        # A. Contexto Tareas
-        tasks = db.query(Task).filter(Task.is_completed == False, Task.telegram_id == user_id).all()
+        # --- 🛡️ EL CADENERO ---
+        usuario = db.query(User).filter(User.telegram_id == chat_id).first()
+        if not usuario:
+            await update.message.reply_text(
+                "❌ Aún no has vinculado tu cuenta.\n\n"
+                "Para usar el bot, ve a tu perfil en la web y pega este ID:\n\n"
+                f"`{chat_id}`\n\n"
+                "¡Escríbeme cuando lo hayas hecho!",
+                parse_mode="Markdown"
+            )
+            return
+        # ----------------------
+
+        tasks = db.query(Task).filter(
+            Task.is_completed == False,
+            Task.user_id == usuario.id
+        ).all()
         tasks_list = [f"{t.id}: {t.title}" for t in tasks]
 
-        # B. Contexto Horario (Desde DB) 📅
-        subjects = db.query(Subject).filter(Subject.telegram_id == user_id).all()
+        subjects = db.query(Subject).filter(Subject.user_id == usuario.id).all()
         if subjects:
             schedule_list = [f"- {s.name}: {s.schedule_text}" for s in subjects]
             user_schedule_str = "\n".join(schedule_list)
         else:
             user_schedule_str = ""
 
-        # C. Consultar a Gemini (Pasando el horario dinámico)
+        # C. Consultar a Gemini
         ai_decision = await asyncio.to_thread(
             analyze_intent,
             user_text,
@@ -135,7 +174,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # D. Ejecutar Acción
-        await execute_ai_action(update, db, ai_decision, user_id)
+        await execute_ai_action(update, db, ai_decision, chat_id)
 
     except Exception as e:
         print(f"Error en handle_message: {e}")
@@ -143,60 +182,70 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
-
-# --- 3. MANEJO DE VOZ (INTELIGENTE) ---
-
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
     await context.bot.send_chat_action(chat_id=chat_id, action="upload_voice")
 
+    db = SessionLocal()
     try:
+        # --- 🛡️ EL CADENERO ---
+        usuario = db.query(User).filter(User.telegram_id == chat_id).first()
+        if not usuario:
+            await update.message.reply_text(
+                "❌ Aún no has vinculado tu cuenta.\n\n"
+                "Para usar el bot, ve a tu perfil en la web y pega este ID:\n\n"
+                f"`{chat_id}`",
+                parse_mode="Markdown"
+            )
+            return
+        # ----------------------
+
         voice_file = await context.bot.get_file(update.message.voice.file_id)
         buffer = io.BytesIO()
         await voice_file.download_to_memory(buffer)
         audio_bytes = buffer.getvalue()
 
-        db = SessionLocal()
-        try:
-            # Contexto Tareas
-            tasks = db.query(Task).filter(Task.is_completed == False, Task.telegram_id == user_id).all()
-            tasks_list = [f"{t.id}: {t.title}" for t in tasks]
+        # Contexto Tareas
+        tasks = db.query(Task).filter(
+            Task.is_completed == False,
+            Task.user_id == usuario.id
+        ).all()
+        tasks_list = [f"{t.id}: {t.title}" for t in tasks]
 
-            # Contexto Horario
-            subjects = db.query(Subject).filter(Subject.telegram_id == user_id).all()
-            if subjects:
-                schedule_list = [f"- {s.name}: {s.schedule_text}" for s in subjects]
-                user_schedule_str = "\n".join(schedule_list)
-            else:
-                user_schedule_str = ""
+        # Contexto Horario
+        subjects = db.query(Subject).filter(Subject.user_id == usuario.id).all()
+        if subjects:
+            schedule_list = [f"- {s.name}: {s.schedule_text}" for s in subjects]
+            user_schedule_str = "\n".join(schedule_list)
+        else:
+            user_schedule_str = ""
 
-            # Consultar AI con Audio + Horario
-            ai_decision = await asyncio.to_thread(
-                analyze_audio_intent,
-                audio_bytes,
-                tasks_list,
-                user_schedule_str
-            )
+        # Consultar AI con Audio + Horario
+        ai_decision = await asyncio.to_thread(
+            analyze_audio_intent,
+            audio_bytes,
+            tasks_list,
+            user_schedule_str
+        )
 
-            await execute_ai_action(update, db, ai_decision, user_id)
-
-        finally:
-            db.close()
+        await execute_ai_action(update, db, ai_decision, chat_id)
 
     except Exception as e:
         print(f"Error en voz: {e}")
         await update.message.reply_text("🔥 Error procesando el audio.")
+    finally:
+        db.close()
 
-
-# --- 4. LÓGICA COMÚN (Ejecutor de acciones) ---
-
-async def execute_ai_action(update: Update, db, ai_decision, user_id: int):
+async def execute_ai_action(update: Update, db, ai_decision, telegram_user_id: int):
     # NOTA: Para completar/borrar, la IA nos devuelve el 'target_id' que identificó
 
     if ai_decision.action == "complete":
-        task = db.query(Task).filter(Task.id == ai_decision.target_id, Task.telegram_id == user_id).first()
+        task = db.query(Task).join(User).filter(
+            Task.id == ai_decision.target_id, 
+            User.telegram_id == telegram_user_id
+        ).first()
+        
         if task:
             task.is_completed = True
             db.commit()
@@ -205,7 +254,11 @@ async def execute_ai_action(update: Update, db, ai_decision, user_id: int):
             await update.message.reply_text(f"🤔 No encontré la tarea {ai_decision.target_id}.")
 
     elif ai_decision.action == "delete":
-        task = db.query(Task).filter(Task.id == ai_decision.target_id, Task.telegram_id == user_id).first()
+        task = db.query(Task).join(User).filter(
+            Task.id == ai_decision.target_id, 
+            User.telegram_id == telegram_user_id
+        ).first()
+
         if task:
             db.delete(task)
             db.commit()
@@ -218,13 +271,19 @@ async def execute_ai_action(update: Update, db, ai_decision, user_id: int):
         await update.message.reply_text(f"🗣️ {reply}")
 
     elif ai_decision.action == "create":
+        # Necesitamos el user_id real
+        user = db.query(User).filter(User.telegram_id == telegram_user_id).first()
+        if not user:
+             await update.message.reply_text("❌ No estás registrado en el sistema.")
+             return
+
         # Aquí usamos la materia que detectó la IA (o "General" si no supo)
         subject_detected = ai_decision.subject or "General"
 
         new_task = Task(
-            telegram_id=user_id,
+            user_id=user.id, # <--- Usar ID de la tabla users
             title=ai_decision.title,
-            subject=subject_detected,  # <--- USAMOS LA IA
+            subject=subject_detected,
             deadline=datetime.fromisoformat(ai_decision.deadline) if ai_decision.deadline else None,
             priority=ai_decision.priority or "media",
             source="telegram"

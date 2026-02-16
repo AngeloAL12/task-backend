@@ -20,12 +20,10 @@ def read_tasks(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if current_user.telegram_id:
-        return db.query(Task).filter(
-            Task.telegram_id == current_user.telegram_id
-        ).order_by(Task.deadline).offset(skip).limit(limit).all()
+    return db.query(Task).filter(
+        Task.user_id == current_user.id
+    ).order_by(Task.deadline).offset(skip).limit(limit).all()
 
-    return []
 
 @router.post("/", response_model=TaskResponse)
 def create_task(
@@ -33,15 +31,9 @@ def create_task(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if not current_user.telegram_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Tu usuario web no está vinculado a una cuenta de Telegram aún."
-        )
-
     new_task = Task(
         **task.dict(),
-        telegram_id=current_user.telegram_id,
+        user_id=current_user.id,
         source="web"
     )
     db.add(new_task)
@@ -55,17 +47,11 @@ def create_magic_task(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if not current_user.telegram_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Tu usuario web no está vinculado a una cuenta de Telegram aún."
-        )
-
     task_data = parse_task_with_ai(payload.text)
 
     new_task = Task(
         **task_data.dict(),
-        telegram_id=current_user.telegram_id,
+        user_id=current_user.id,
         source="magic_web"
     )
     db.add(new_task)
@@ -82,7 +68,7 @@ def update_task(
 ):
     task = db.query(Task).filter(
         Task.id == task_id,
-        Task.telegram_id == current_user.telegram_id
+        Task.user_id == current_user.id
     ).first()
 
     if not task:
@@ -104,7 +90,7 @@ def delete_task(
 ):
     task = db.query(Task).filter(
         Task.id == task_id,
-        Task.telegram_id == current_user.telegram_id
+        Task.user_id == current_user.id
     ).first()
 
     if not task:
