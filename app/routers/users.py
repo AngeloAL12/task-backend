@@ -34,19 +34,32 @@ def read_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return user
 
+
 @router.patch("/{user_id}", response_model=schemas.User)
 def update_user(
-    user_id: int, 
-    user_update: schemas.UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_superadmin)
+        user_id: int,
+        user_update: schemas.UserUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
 ):
+    if current_user.id != user_id and not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para actualizar a otro usuario"
+        )
+
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    if user_update.is_superadmin is not None and not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No puedes cambiar tus permisos de administrador"
+        )
+
     update_data = user_update.model_dump(exclude_unset=True)
-    
+
     if "password" in update_data:
         password = update_data.pop("password")
         if password:
