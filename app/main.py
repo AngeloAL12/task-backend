@@ -6,6 +6,10 @@ from app.db.database import Base, engine
 from app.bot import create_bot_app
 from app.routers import auth, users
 from app.routers import calendars # <--- Importar el nuevo router
+from app.services.reminders import check_and_send_reminders
+from asyncio import create_task
+import asyncio
+
 
 
 @asynccontextmanager
@@ -18,9 +22,17 @@ async def lifespan(app: FastAPI):
     await bot_app.updater.start_polling()
     print("🤖 Bot de Telegram conectado y escuchando dentro de FastAPI")
 
+    reminder_task = create_task(check_and_send_reminders(bot_app))
+
     yield
 
     print("🛑 Deteniendo Bot de Telegram...")
+    reminder_task.cancel()
+    try:
+        await reminder_task
+    except asyncio.CancelledError:
+        pass
+
     await bot_app.updater.stop()
     await bot_app.stop()
     await bot_app.shutdown()

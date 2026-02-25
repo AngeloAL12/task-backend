@@ -7,6 +7,7 @@ class User(BaseModel):
     is_superadmin: bool
     is_active: bool
     telegram_id: int | None = None
+    reminder_preferences: list[int]
 
     class Config:
         from_attributes = True
@@ -18,3 +19,4 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     password: str | None = None
     telegram_id: int | None = None
+    reminder_preferences: list[int] | None = None

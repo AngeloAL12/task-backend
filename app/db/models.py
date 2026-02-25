@@ -13,6 +13,7 @@ class User(Base):
     telegram_id = Column(BigInteger, nullable=True, unique=True)
     is_superadmin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    reminder_preferences = Column(JSON, default=[24, 12, 2])
 
     tasks = relationship("Task", back_populates="user")
     subjects = relationship("Subject", back_populates="user")
@@ -34,6 +35,7 @@ class Task(Base):
     source = Column(String)
     external_uid = Column(String, index=True, nullable=True) # Unique ID from iCal
     calendar_source_id = Column(Integer, ForeignKey("calendar_sources.id"), nullable=True)
+    sent_reminders = Column(JSON, default=[])
 
     user = relationship("User", back_populates="tasks")
     calendar_source = relationship("CalendarSource", back_populates="tasks")

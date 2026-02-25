@@ -38,6 +38,7 @@ class TaskResponse(TaskCreate):
     id: int
     is_completed: bool
     created_at: datetime
+    sent_reminders: list[int] = []
 
     class Config:
         from_attributes = True
