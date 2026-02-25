@@ -1,6 +1,27 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Optional, Literal
+
+def calculate_dynamic_priority(deadline: Optional[datetime], current_priority: str = "media") -> str:
+    if not deadline:
+        return current_priority
+        
+    now = datetime.now()
+    if deadline.tzinfo is not None:
+        now = now.astimezone()
+    
+    deadline_date = deadline.date()
+    today = now.date()
+    
+    delta_days = (deadline_date - today).days
+
+    if delta_days <= 1:
+        return "alta"
+    elif delta_days in (2, 3):
+        return "media"
+    else:
+        return "baja"
+
 
 class MagicPayload(BaseModel):
     text: str
@@ -39,6 +60,11 @@ class TaskResponse(TaskCreate):
     is_completed: bool
     created_at: datetime
     sent_reminders: list[int] = []
+
+    @model_validator(mode="after")
+    def compute_dynamic_priority(self) -> "TaskResponse":
+        self.priority = calculate_dynamic_priority(self.deadline, self.priority)
+        return self
 
     class Config:
         from_attributes = True

@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db.database import SessionLocal
 from app.db.models import Task, Subject, User  # <--- Importamos Subject y User
 from app.services.ai_service import analyze_intent, analyze_audio_intent
+from app.schemas.task import calculate_dynamic_priority
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,7 +61,8 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg = "📋 **Tus Tareas Pendientes:**\n\n"
         for t in tasks:
-            icon = "🔥" if t.priority == "alta" else "🔹"
+            computed_prio = calculate_dynamic_priority(t.deadline, t.priority)
+            icon = "🔥" if computed_prio == "alta" else "🔹"
             date = t.deadline.strftime('%d/%m %H:%M') if t.deadline else "Sin fecha"
             # Mostramos la materia detectada (subject)
             msg += f"{icon} **{t.title}**\n   └ 📚 {t.subject} | 📅 {date}\n\n"
@@ -294,11 +296,13 @@ async def execute_ai_action(update: Update, db, ai_decision, telegram_user_id: i
 
         date_str = new_task.deadline.strftime('%d/%m %H:%M') if new_task.deadline else "Hoy"
 
+        computed_prio = calculate_dynamic_priority(new_task.deadline, new_task.priority)
+
         msg = (f"✅ **Tarea Guardada**\n\n"
                f"📚 **{new_task.subject}**\n"  # Confirmación visual
                f"📝 {new_task.title}\n"
                f"📅 {date_str}\n"
-               f"🚨 Prioridad: {new_task.priority.upper()}")
+               f"🚨 Prioridad: {computed_prio.upper()}")
 
         await update.message.reply_text(msg, parse_mode="Markdown")
 
