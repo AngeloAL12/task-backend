@@ -20,6 +20,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # Rechazar refresh tokens usados como access tokens
+        if payload.get("type") == "refresh":
+            raise credentials_exception
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -33,8 +36,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuario inactivo"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario inactivo",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

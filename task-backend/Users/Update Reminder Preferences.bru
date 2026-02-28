@@ -1,0 +1,26 @@
+meta {
+  name: Update Reminder Preferences
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/users/1
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "reminder_preferences": [24, 12, 2, 1]
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,11 +1,16 @@
 # app/main.py
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.core.limiter import limiter
+from app.core.config import settings
 from app.routers import tasks
 from app.db.database import Base, engine
 from app.bot import create_bot_app
 from app.routers import auth, users
-from app.routers import calendars # <--- Importar el nuevo router
+from app.routers import calendars
 from app.services.reminders import check_and_send_reminders
 from asyncio import create_task
 import asyncio
@@ -43,11 +48,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from fastapi.middleware.cors import CORSMiddleware
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todo (ajustar en prod)
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

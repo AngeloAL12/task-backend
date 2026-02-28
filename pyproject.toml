@@ -22,5 +22,6 @@ dependencies = [
     "requests>=2.32.5",
     "sqlalchemy>=2.0.46",
     "sqlalchemy-libsql>=0.2.0",
+    "slowapi>=0.1.9",
     "uvicorn>=0.40.0",
 ]

@@ -13,9 +13,12 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str
     TELEGRAM_TOKEN: str
-    
-    SECRET_KEY: str = "your-secret-key-here" # Fallback only for dev, should be in .env
+
+    SECRET_KEY: str  # Obligatorio — sin fallback. Debe estar en .env
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     class Config:
 
