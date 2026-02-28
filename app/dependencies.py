@@ -1,5 +1,4 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -9,14 +8,17 @@ from app.db.models import User
 from app.core.security import ALGORITHM, SECRET_KEY
 from app.schemas.auth import TokenData
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudieron validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    token = request.cookies.get("access_token")
+    if not token:
+        raise credentials_exception
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -42,6 +44,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         )
 
     return user
+
 
 async def get_current_superadmin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_superadmin:

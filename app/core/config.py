@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    SECURE_COOKIES: bool = False   # True en producción (HTTPS)
+    COOKIE_SAMESITE: str = "lax"
+
     class Config:
 
         env_file = str(ENV_PATH)
