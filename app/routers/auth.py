@@ -16,7 +16,7 @@ from app.core.security import (
     SECRET_KEY,
 )
 from app.core.config import settings
-from app.schemas.auth import UserCreate, Token
+from app.schemas.auth import UserCreate, Token, RefreshRequest
 
 router = APIRouter(
     prefix="/auth",
@@ -84,7 +84,7 @@ def login_for_access_token(
 @limiter.limit("10/minute")
 def refresh_access_token(
     request: Request,
-    refresh_token: str,
+    body: RefreshRequest,
     db: Session = Depends(get_db),
 ):
     credentials_exception = HTTPException(
@@ -94,7 +94,7 @@ def refresh_access_token(
     )
 
     try:
-        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") != "refresh":
             raise credentials_exception
         email: str = payload.get("sub")
