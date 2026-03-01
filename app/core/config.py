@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     SECURE_COOKIES: bool = False   # True en producción (HTTPS)
     COOKIE_SAMESITE: str = "lax"
 
+    # SSRF: calendarios (vacío = solo bloquear IPs privadas/loopback)
+    ALLOWED_CALENDAR_HOSTS: list[str] = []
+    CALENDAR_REQUIRE_HTTPS: bool = False  # True en producción si solo quieres https
+
     class Config:
 
         env_file = str(ENV_PATH)

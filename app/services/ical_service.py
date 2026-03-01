@@ -3,11 +3,29 @@ from icalendar import Calendar
 from datetime import datetime
 from typing import List, Dict, Optional
 
+from app.core.url_safety import is_url_safe_for_fetch
+
+# Timeout and redirect limit for SSRF defense
+FETCH_TIMEOUT_SECONDS = 15
+FETCH_MAX_REDIRECTS = 3
+
+
+class URLNotAllowedError(ValueError):
+    """Raised when a URL is rejected by SSRF validation."""
+
+
 class ICalService:
     @staticmethod
     def fetch_ics(url: str) -> Optional[str]:
+        if not is_url_safe_for_fetch(url):
+            raise URLNotAllowedError("URL no permitida para calendario.")
         try:
-            response = requests.get(url)
+            response = requests.get(
+                url,
+                timeout=FETCH_TIMEOUT_SECONDS,
+                allow_redirects=True,
+                max_redirects=FETCH_MAX_REDIRECTS,
+            )
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:

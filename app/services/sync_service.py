@@ -2,7 +2,7 @@ import re
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from app.db.models import Task, CalendarSource, User
-from app.services.ical_service import ICalService
+from app.services.ical_service import ICalService, URLNotAllowedError
 
 def clean_moodle_title(title: str) -> str:
     if not title: return "Evento sin título"
@@ -40,7 +40,10 @@ class SyncService:
         if not user:
             return {"error": "User not found"}
 
-        content = ICalService.fetch_ics(source.source_url)
+        try:
+            content = ICalService.fetch_ics(source.source_url)
+        except URLNotAllowedError:
+            return {"error": "La URL del calendario no está permitida."}
         if not content:
             return {"error": "Failed to fetch ICS content"}
              
@@ -130,7 +133,7 @@ class SyncService:
                 if res == "created": synced_count += 1
                 elif res == "updated": updated_count += 1
 
-        source.last_synced_at = datetime.utcnow()
+        source.last_synced_at = datetime.now(timezone.utc)
         db.commit()
         
         return {

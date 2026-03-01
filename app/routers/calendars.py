@@ -1,7 +1,8 @@
 from typing import List, Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.limiter import limiter
 from app.db.database import get_db
 from app.db.models import CalendarSource, User
 from app.schemas.calendar import CalendarSourceCreate, CalendarSourceResponse, SyncResponse
@@ -14,7 +15,9 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=CalendarSourceResponse)
+@limiter.limit("5/minute")
 def create_calendar_source(
+        request: Request,
         source: CalendarSourceCreate,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
@@ -39,7 +42,9 @@ def create_calendar_source(
     return db_source
 
 @router.get("/", response_model=List[CalendarSourceResponse])
+@limiter.limit("60/minute")
 def read_calendar_sources(
+        request: Request,
         skip: int = 0,
         limit: int = 100,
         db: Session = Depends(get_db),
@@ -50,7 +55,9 @@ def read_calendar_sources(
     ).offset(skip).limit(limit).all()
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/minute")
 def delete_calendar_source(
+        request: Request,
         source_id: int,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
@@ -68,7 +75,9 @@ def delete_calendar_source(
     return None
 
 @router.post("/{source_id}/sync", response_model=SyncResponse)
+@limiter.limit("10/minute")
 def sync_calendar(
+        request: Request,
         source_id: int,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
@@ -91,7 +100,9 @@ def sync_calendar(
 
 
 @router.patch("/{source_id}/mapping", response_model=SyncResponse)
+@limiter.limit("20/minute")
 def update_mapping(
+        request: Request,
         source_id: int,
         mapping: Dict[str, str],
         db: Session = Depends(get_db),

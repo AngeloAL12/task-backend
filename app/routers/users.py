@@ -1,7 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.limiter import limiter
 from app.db.database import get_db
 from app.db import models
 from app.schemas import users as schemas
@@ -14,7 +15,9 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=List[schemas.User])
+@limiter.limit("60/minute")
 def read_users(
+    request: Request,
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db),
@@ -24,13 +27,17 @@ def read_users(
     return users
 
 @router.get("/me", response_model=schemas.User)
+@limiter.limit("60/minute")
 def read_user_me(
+    request: Request,
     current_user: models.User = Depends(get_current_user)
 ):
     return current_user
 
 @router.get("/{user_id}", response_model=schemas.User)
+@limiter.limit("60/minute")
 def read_user(
+    request: Request,
     user_id: int, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
@@ -42,7 +49,9 @@ def read_user(
 
 
 @router.patch("/{user_id}", response_model=schemas.User)
+@limiter.limit("10/minute")
 def update_user(
+        request: Request,
         user_id: int,
         user_update: schemas.UserUpdate,
         db: Session = Depends(get_db),
@@ -80,7 +89,9 @@ def update_user(
     return user
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
 def delete_user(
+    request: Request,
     user_id: int, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
